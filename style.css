@@ -3,6 +3,39 @@
     padding: 0;
     box-sizing: border-box;
     font-family: 'Arial', sans-serif;
+    user-select: none; /* Prevent text selection on all elements by default */
+    -webkit-user-select: none; /* Safari */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* IE/Edge */
+    -webkit-touch-callout: none; /* iOS Safari */
+}
+
+/* Apply to all images to prevent dragging */
+img {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+    pointer-events: none; /* Make images non-selectable */
+}
+
+/* Override pointer-events for the pet sprite to allow clicking */
+.pet-container img {
+    pointer-events: auto;
+}
+
+/* Ensure all interactive elements have proper pointer events */
+button, .pet-container, .controls, .debug-menu, .toggle-debug-btn {
+    pointer-events: auto !important;
+}
+
+/* Even the message log should not be selectable */
+.message-log {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 body {
@@ -90,6 +123,8 @@ h1 {
     cursor: pointer; /* Make pet clickable */
     z-index: 5;
     transition: transform 0.3s ease;
+    user-select: none; /* Prevent text selection */
+    -webkit-user-drag: none; /* Prevent dragging on WebKit browsers */
 }
 
 .pet-container:hover {
@@ -103,6 +138,9 @@ h1 {
     filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.2));
     transition: transform 0.3s ease;
     pointer-events: none; /* Allow clicks to pass through to container */
+    user-select: none; /* Prevent text selection */
+    -webkit-user-drag: none; /* Prevent dragging on WebKit browsers */
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
 }
 
 /* Move stats to bottom right corner */
@@ -167,10 +205,12 @@ h1 {
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 10;
-    pointer-events: auto; /* Make sure it's clickable */
     display: flex;
-    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    z-index: 10;
+    pointer-events: auto;
 }
 
 button {
@@ -229,6 +269,7 @@ button:active {
     overflow-y: auto;
     transition: opacity 0.3s ease;
     pointer-events: auto; /* Make sure it's clickable */
+    user-select: text; /* Allow text selection in message log */
 }
 
 .message-log:hover {
@@ -443,4 +484,206 @@ button:active {
 @keyframes walk {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-5px); }
+}
+
+/* Debug Menu Styles */
+.debug-menu {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    padding: 10px;
+    color: white;
+    z-index: 100;
+    max-width: 300px;
+    pointer-events: auto;
+    transition: all 0.3s ease;
+}
+
+.debug-menu h3 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    text-align: center;
+    color: #ffcc00;
+}
+
+.debug-menu h4 {
+    margin: 5px 0;
+    font-size: 14px;
+    color: #4caf50;
+}
+
+.debug-controls {
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    gap: 10px;
+}
+
+.debug-menu.active .debug-controls {
+    display: flex;
+}
+
+.debug-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.debug-section button {
+    font-size: 12px;
+    padding: 5px 8px;
+    background-color: #555;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.debug-section button:hover {
+    background-color: #777;
+}
+
+#hunger-decrease, #happiness-decrease {
+    background-color: #f44336;
+}
+
+#hunger-increase, #happiness-increase {
+    background-color: #4caf50;
+}
+
+#hunger-zero, #happiness-zero {
+    background-color: #ff9800;
+}
+
+#hunger-full, #happiness-full {
+    background-color: #2196f3;
+}
+
+.toggle-debug-btn {
+    width: 100%;
+    padding: 5px;
+    background-color: #333;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.toggle-debug-btn:hover {
+    background-color: #555;
+}
+
+/* Cake Container */
+.cake-container {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 15px;
+    position: relative;
+    cursor: grab;
+    transition: transform 0.2s;
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 8px;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.cake-container:hover {
+    transform: scale(1.1);
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+.cake-container:active {
+    cursor: grabbing;
+    transform: scale(1.15);
+}
+
+#cake-sprite {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    user-select: none;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+    pointer-events: auto !important;
+    -webkit-user-drag: element !important;
+    -khtml-user-drag: element !important;
+    -moz-user-drag: element !important;
+    -o-user-drag: element !important;
+    user-drag: element !important;
+    cursor: grab;
+}
+
+/* Dragging States */
+.cake-container.dragging {
+    opacity: 0.7;
+    position: absolute;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.pet-container.can-feed {
+    filter: brightness(1.2);
+}
+
+/* Feeding Animation */
+@keyframes feeding {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.feeding {
+    animation: feeding 0.8s ease-in-out;
+}
+
+/* Cake Animation */
+@keyframes float-to-pet {
+    0% { transform: translate(0, 0) scale(1); }
+    75% { transform: translate(var(--target-x), var(--target-y)) scale(0.8); }
+    100% { transform: translate(var(--target-x), var(--target-y)) scale(0); }
+}
+
+.float-to-pet {
+    position: absolute;
+    animation: float-to-pet 0.8s forwards;
+}
+
+/* Tooltip */
+.tooltip {
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.cake-container:hover .tooltip {
+    opacity: 1;
+}
+
+/* Hunger indicator */
+@keyframes hungry-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.pet-container.hungry::after {
+    content: "😋";
+    position: absolute;
+    top: -20px;
+    right: -10px;
+    font-size: 20px;
+    animation: hungry-pulse 1.5s infinite;
 } 

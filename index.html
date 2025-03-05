@@ -53,8 +53,39 @@
         
         <!-- Controls in bottom center -->
         <div class="controls">
-            <button id="feed-btn">Feed</button>
+            <button id="feed-btn">Feed with Cake</button>
             <button id="explore-btn" class="active">Explore</button>
+            <div id="cake-container" class="cake-container" title="Drag the cake to feed Viscunam">
+                <img id="cake-sprite" src="sprite/cake.png" alt="Cake" draggable="true">
+                <span class="tooltip">Drag to feed</span>
+            </div>
+        </div>
+        
+        <!-- Debug Menu (hidden by default) -->
+        <div class="debug-menu">
+            <h3>Debug Controls</h3>
+            <div class="debug-controls">
+                <div class="debug-section">
+                    <h4>Hunger</h4>
+                    <button id="hunger-decrease">-20</button>
+                    <button id="hunger-increase">+20</button>
+                    <button id="hunger-zero">Set to 0</button>
+                    <button id="hunger-full">Set to 100</button>
+                </div>
+                <div class="debug-section">
+                    <h4>Happiness</h4>
+                    <button id="happiness-decrease">-20</button>
+                    <button id="happiness-increase">+20</button>
+                    <button id="happiness-zero">Set to 0</button>
+                    <button id="happiness-full">Set to 100</button>
+                </div>
+                <div class="debug-section">
+                    <h4>Sprites</h4>
+                    <button id="check-sprites">Check All Sprites</button>
+                    <button id="log-current-sprite">Log Current Sprite</button>
+                </div>
+            </div>
+            <button id="toggle-debug" class="toggle-debug-btn">Show Debug Menu</button>
         </div>
     </div>
     
