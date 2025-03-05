@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viscunam - Virtual Pet Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Background elements -->
+    <div class="sun"></div>
+    <div class="cloud"></div>
+    <div class="cloud"></div>
+    <div class="ground"></div>
+    
+    <!-- Decorative elements -->
+    <div class="flower"></div>
+    <div class="flower"></div>
+    <div class="flower"></div>
+    <div class="flower"></div>
+    <div class="butterfly"></div>
+    <div class="butterfly"></div>
+    
+    <div class="game-container">
+        <h1>Feed Viscunam!!</h1>
+        
+        <!-- Pet in center -->
+        <div class="pet-container">
+            <img id="pet-sprite" src="sprite/normal.png" alt="Viscunam">
+        </div>
+        
+        <!-- Status messages in top left -->
+        <div class="message-log">
+            <h3>Status Messages</h3>
+            <div id="message-container"></div>
+        </div>
+        
+        <!-- Stats in bottom right -->
+        <div class="stats-container">
+            <div class="stat">
+                <span>Hunger:</span>
+                <div class="progress-bar">
+                    <div id="hunger-bar" class="progress"></div>
+                </div>
+            </div>
+            <div class="stat">
+                <span>Happiness:</span>
+                <div class="progress-bar">
+                    <div id="happiness-bar" class="progress"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Controls in bottom center -->
+        <div class="controls">
+            <button id="feed-btn">Feed</button>
+            <button id="explore-btn" class="active">Explore</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html> 

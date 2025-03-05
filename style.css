@@ -1,0 +1,446 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Arial', sans-serif;
+}
+
+body {
+    background-color: #a8e6cf; /* Light green for field */
+    background-image: linear-gradient(to bottom, #87ceeb 0%, #87ceeb 50%, #a8e6cf 50%, #a8e6cf 100%); /* Sky and field */
+    min-height: 100vh;
+    padding: 0;
+    margin: 0;
+    overflow: hidden; /* Prevent scrolling */
+    position: relative;
+}
+
+/* Sun styling */
+.sun {
+    position: absolute;
+    top: 15%;
+    right: 15%;
+    width: 80px;
+    height: 80px;
+    background-color: #ffdd44;
+    border-radius: 50%;
+    box-shadow: 0 0 50px #ffdd44;
+    z-index: 1;
+    animation: pulse 5s infinite alternate;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); box-shadow: 0 0 50px #ffdd44; }
+    100% { transform: scale(1.1); box-shadow: 0 0 70px #ffdd44; }
+}
+
+/* Sun rays */
+.sun::after {
+    content: '';
+    position: absolute;
+    top: -30%;
+    left: -30%;
+    width: 160%;
+    height: 160%;
+    background-image: 
+        radial-gradient(circle, transparent 70%, #ffdd44 70%, #ffdd44 72%, transparent 72%),
+        radial-gradient(circle, transparent 70%, #ffdd44 70%, #ffdd44 72%, transparent 72%),
+        radial-gradient(circle, transparent 70%, #ffdd44 70%, #ffdd44 72%, transparent 72%),
+        radial-gradient(circle, transparent 70%, #ffdd44 70%, #ffdd44 72%, transparent 72%);
+    background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+    background-size: 100% 100%;
+    transform: rotate(45deg);
+    z-index: -1;
+    animation: rotate 60s linear infinite;
+}
+
+@keyframes rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.game-container {
+    width: 100%;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    cursor: pointer; /* Show pointer cursor to indicate clickable area */
+}
+
+h1 {
+    color: #ff6b6b;
+    font-size: 2.5rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    pointer-events: none; /* Allow clicks to pass through */
+}
+
+.pet-container {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer; /* Make pet clickable */
+    z-index: 5;
+    transition: transform 0.3s ease;
+}
+
+.pet-container:hover {
+    filter: brightness(1.1);
+}
+
+#pet-sprite {
+    max-height: 200px;
+    max-width: 200px;
+    object-fit: contain;
+    filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.2));
+    transition: transform 0.3s ease;
+    pointer-events: none; /* Allow clicks to pass through to container */
+}
+
+/* Move stats to bottom right corner */
+.stats-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 250px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+    transition: transform 0.3s ease;
+    pointer-events: auto; /* Make sure it's clickable */
+}
+
+.stats-container:hover {
+    transform: scale(1.05);
+}
+
+.stat {
+    margin: 5px 0;
+    text-align: left;
+    display: flex;
+    align-items: center;
+}
+
+.stat span {
+    width: 80px;
+    font-weight: bold;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.progress-bar {
+    flex-grow: 1;
+    height: 15px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress {
+    height: 100%;
+    background-color: #4caf50;
+    width: 100%;
+    transition: width 0.3s ease;
+}
+
+#hunger-bar {
+    background-color: #ff9800;
+}
+
+#happiness-bar {
+    background-color: #2196f3;
+}
+
+/* Move controls to bottom center */
+.controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    pointer-events: auto; /* Make sure it's clickable */
+    display: flex;
+    gap: 10px;
+}
+
+button {
+    background-color: #ff6b6b;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+    background-color: #ff5252;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Explore button styles */
+#explore-btn {
+    background-color: #4caf50;
+}
+
+#explore-btn:hover {
+    background-color: #3d8b40;
+}
+
+#explore-btn.active {
+    background-color: #4caf50;
+    border: 2px solid white;
+}
+
+#explore-btn.inactive {
+    background-color: #9e9e9e;
+}
+
+/* Move message log to top left corner and make it smaller */
+.message-log {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 250px;
+    background-color: rgba(255, 255, 255, 0.7);
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+    max-height: 200px;
+    overflow-y: auto;
+    transition: opacity 0.3s ease;
+    pointer-events: auto; /* Make sure it's clickable */
+}
+
+.message-log:hover {
+    opacity: 1;
+}
+
+.message-log:not(:hover) {
+    opacity: 0.7;
+}
+
+.message-log h3 {
+    color: #555;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+#message-container {
+    max-height: 150px;
+    overflow-y: auto;
+    padding: 5px;
+    background-color: rgba(249, 249, 249, 0.7);
+    border-radius: 5px;
+    font-size: 0.8rem;
+}
+
+.message {
+    margin-bottom: 3px;
+    padding: 3px;
+    border-bottom: 1px solid #eee;
+}
+
+.message.server {
+    color: #2196f3;
+}
+
+.message.client {
+    color: #ff9800;
+}
+
+/* Add some clouds */
+@keyframes float {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100vw); }
+}
+
+.cloud {
+    position: absolute;
+    background-color: white;
+    border-radius: 50%;
+    opacity: 0.8;
+    z-index: 1;
+    pointer-events: none; /* Allow clicks to pass through */
+}
+
+.cloud:nth-child(2) {
+    width: 100px;
+    height: 60px;
+    top: 20%;
+    left: 0;
+    animation: float 60s linear infinite;
+}
+
+.cloud:nth-child(3) {
+    width: 140px;
+    height: 80px;
+    top: 10%;
+    left: -20%;
+    animation: float 80s linear infinite;
+    animation-delay: 10s;
+}
+
+/* Make clouds more cloud-like with pseudo-elements */
+.cloud::before,
+.cloud::after {
+    content: '';
+    position: absolute;
+    background-color: white;
+    border-radius: 50%;
+}
+
+.cloud::before {
+    width: 60%;
+    height: 100%;
+    top: -50%;
+    left: 20%;
+}
+
+.cloud::after {
+    width: 70%;
+    height: 100%;
+    top: -30%;
+    right: 10%;
+}
+
+/* Add ground across the bottom of the screen */
+.ground {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    background-color: #a8e6cf;
+    z-index: 0;
+    pointer-events: none; /* Allow clicks to pass through */
+}
+
+/* Add flowers to the ground */
+.flower {
+    position: absolute;
+    bottom: 5%;
+    width: 20px;
+    height: 20px;
+    z-index: 2;
+    pointer-events: none; /* Allow clicks to pass through */
+}
+
+.flower::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: white;
+    border-radius: 50%;
+    box-shadow: 
+        10px 0 0 white,
+        -10px 0 0 white,
+        0 10px 0 white,
+        0 -10px 0 white;
+}
+
+.flower::after {
+    content: '';
+    position: absolute;
+    width: 30%;
+    height: 30%;
+    background-color: yellow;
+    border-radius: 50%;
+    top: 35%;
+    left: 35%;
+}
+
+.flower:nth-child(1) {
+    left: 15%;
+    transform: scale(0.7);
+}
+
+.flower:nth-child(2) {
+    left: 25%;
+    transform: scale(0.9);
+}
+
+.flower:nth-child(3) {
+    left: 75%;
+    transform: scale(0.8);
+}
+
+.flower:nth-child(4) {
+    left: 85%;
+    transform: scale(0.6);
+}
+
+/* Add butterfly */
+@keyframes flutter {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    25% { transform: translate(10px, -10px) rotate(5deg); }
+    50% { transform: translate(0, -20px) rotate(0deg); }
+    75% { transform: translate(-10px, -10px) rotate(-5deg); }
+}
+
+.butterfly {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    z-index: 3;
+    animation: flutter 4s infinite ease-in-out, float 30s linear infinite;
+    pointer-events: none; /* Allow clicks to pass through */
+}
+
+.butterfly::before,
+.butterfly::after {
+    content: '';
+    position: absolute;
+    width: 15px;
+    height: 20px;
+    background-color: rgba(255, 182, 193, 0.8); /* Light pink */
+    border-radius: 50% 50% 0 50%;
+}
+
+.butterfly::before {
+    left: -10px;
+    transform: rotate(-30deg);
+}
+
+.butterfly::after {
+    right: -10px;
+    transform: rotate(30deg) scaleX(-1);
+}
+
+.butterfly:nth-child(1) {
+    top: 40%;
+    left: 10%;
+}
+
+.butterfly:nth-child(2) {
+    top: 30%;
+    left: 80%;
+    animation-delay: 2s;
+    animation-duration: 35s;
+}
+
+/* Walking animation */
+@keyframes walk {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+} 
