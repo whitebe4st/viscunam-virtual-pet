@@ -8,18 +8,7 @@
 </head>
 <body>
     <!-- Background elements -->
-    <div class="sun"></div>
-    <div class="cloud"></div>
-    <div class="cloud"></div>
     <div class="ground"></div>
-    
-    <!-- Decorative elements -->
-    <div class="flower"></div>
-    <div class="flower"></div>
-    <div class="flower"></div>
-    <div class="flower"></div>
-    <div class="butterfly"></div>
-    <div class="butterfly"></div>
     
     <div class="game-container">
         <h1>Feed Viscunam!!</h1>
@@ -31,7 +20,10 @@
         
         <!-- Status messages in top left -->
         <div class="message-log">
-            <h3>Status Messages</h3>
+            <div class="message-header">
+                <h3>Status Messages</h3>
+                <button id="clear-messages" title="Clear all messages">Clear</button>
+            </div>
             <div id="message-container"></div>
         </div>
         
@@ -49,15 +41,26 @@
                     <div id="happiness-bar" class="progress"></div>
                 </div>
             </div>
+            <div class="stat">
+                <span>Sleepiness:</span>
+                <div class="progress-bar">
+                    <div id="sleepiness-bar" class="progress"></div>
+                </div>
+            </div>
         </div>
         
         <!-- Controls in bottom center -->
         <div class="controls">
             <button id="feed-btn">Feed with Cake</button>
             <button id="explore-btn" class="active">Explore</button>
-            <div id="cake-container" class="cake-container" title="Drag the cake to feed Viscunam">
+            <button id="sleep-btn">Sleep</button>
+            <div id="cake-container" class="item-container" title="Drag the cake to feed Viscunam">
                 <img id="cake-sprite" src="sprite/cake.png" alt="Cake" draggable="true">
                 <span class="tooltip">Drag to feed</span>
+            </div>
+            <div id="coffee-container" class="item-container" title="Drag the coffee to wake up Viscunam">
+                <img id="coffee-sprite" src="sprite/coffee.png" alt="Coffee" draggable="true">
+                <span class="tooltip">Drag to energize</span>
             </div>
         </div>
         
@@ -78,6 +81,13 @@
                     <button id="happiness-increase">+20</button>
                     <button id="happiness-zero">Set to 0</button>
                     <button id="happiness-full">Set to 100</button>
+                </div>
+                <div class="debug-section">
+                    <h4>Sleepiness</h4>
+                    <button id="sleepiness-decrease">-20</button>
+                    <button id="sleepiness-increase">+20</button>
+                    <button id="sleepiness-zero">Set to 0</button>
+                    <button id="sleepiness-full">Set to 100</button>
                 </div>
                 <div class="debug-section">
                     <h4>Sprites</h4>

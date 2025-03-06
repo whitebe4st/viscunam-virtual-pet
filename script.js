@@ -5,23 +5,29 @@
 const gameState = {
     hunger: 100, // 0-100, 0 is starving, 100 is full
     happiness: 100, // 0-100, 0 is sad, 100 is happy
+    sleepiness: 0, // 0-100, 0 is awake, 100 is very sleepy
     lastFed: Date.now(),
+    lastSlept: Date.now(), // Track when Viscunam last slept
     status: 'normal', // normal, happy, slumber
     connected: false,
     isWalking: false,
     walkStep: 1, // 1 or 2 for animation frames
     position: { x: 50, y: 50 }, // percentage of screen
-    direction: 1, // 1 = right, -1 = left
+    direction: { x: 1, y: 0 }, // direction vector
     walkAnimationSpeed: 400, // milliseconds between animation frames (slower = cuter)
-    moveSpeed: 0.3, // percentage of screen per step (increased for more noticeable movement)
+    moveSpeed: 0.3, // percentage of screen per step
     targetPosition: null, // target position for autonomous movement
     pauseTime: 0, // time to pause between explorations
     maxPauseTime: 1.5, // maximum pause time in seconds (reduced for more frequent movement)
     isExploring: true, // whether Viscunam is in exploration mode
-    explorationRange: 100, // percentage of screen width for exploration (increased to full screen)
+    explorationRange: { x: 100, y: 70 }, // percentage of screen for exploration
     userInteracted: false, // flag to track if user has interacted recently
     restlessness: 0.8, // probability of changing direction during exploration (increased for more active movement)
-    debugMode: false // whether debug mode is active
+    debugMode: false, // whether debug mode is active
+    zScaleFactor: 0.5, // how much to scale based on z position (depth perception)
+    minScale: 0.7, // minimum scale factor for z-axis movement
+    maxScale: 1.3, // maximum scale factor for z-axis movement
+    isSleeping: false // whether Viscunam is currently sleeping
 };
 
 // DOM Elements
@@ -29,12 +35,17 @@ const petSprite = document.getElementById('pet-sprite');
 const petContainer = document.querySelector('.pet-container');
 const hungerBar = document.getElementById('hunger-bar');
 const happinessBar = document.getElementById('happiness-bar');
+const sleepinessBar = document.getElementById('sleepiness-bar');
 const feedButton = document.getElementById('feed-btn');
 const exploreButton = document.getElementById('explore-btn');
+const sleepButton = document.getElementById('sleep-btn');
 const messageContainer = document.getElementById('message-container');
 const gameContainer = document.querySelector('.game-container');
 const cakeSprite = document.getElementById('cake-sprite');
 const cakeContainer = document.getElementById('cake-container');
+const coffeeSprite = document.getElementById('coffee-sprite');
+const coffeeContainer = document.getElementById('coffee-container');
+const clearMessagesBtn = document.getElementById('clear-messages');
 
 // Debug Menu Elements
 const debugMenu = document.querySelector('.debug-menu');
@@ -47,6 +58,10 @@ const happinessDecreaseButton = document.getElementById('happiness-decrease');
 const happinessIncreaseButton = document.getElementById('happiness-increase');
 const happinessZeroButton = document.getElementById('happiness-zero');
 const happinessFullButton = document.getElementById('happiness-full');
+const sleepinessDecreaseButton = document.getElementById('sleepiness-decrease');
+const sleepinessIncreaseButton = document.getElementById('sleepiness-increase');
+const sleepinessZeroButton = document.getElementById('sleepiness-zero');
+const sleepinessFullButton = document.getElementById('sleepiness-full');
 
 // DOM Elements for debug sprite buttons
 const checkSpritesButton = document.getElementById('check-sprites');
@@ -67,6 +82,7 @@ const SERVER_URL = 'ws://localhost:8080'; // Change this to your server URL if n
 const ACTIONS = {
     CONNECT: 'CONNECT',
     FEED: 'FEED',
+    COFFEE: 'COFFEE',
     UPDATE: 'UPDATE',
     DISCONNECT: 'DISCONNECT'
 };
@@ -157,8 +173,25 @@ function handleServerMessage(message) {
         case ACTIONS.UPDATE:
             if (params.hunger) gameState.hunger = parseInt(params.hunger);
             if (params.happiness) gameState.happiness = parseInt(params.happiness);
+            if (params.sleepiness) gameState.sleepiness = parseInt(params.sleepiness);
             if (params.status) gameState.status = params.status;
             updateUI();
+            break;
+            
+        case ACTIONS.COFFEE:
+            // Server acknowledges coffee action directly
+            // Reduce sleepiness
+            modifySleepiness(-30);
+            
+            // Increase happiness slightly
+            modifyHappiness(5);
+            
+            // Update status
+            updatePetStatus();
+            updateUI();
+            
+            // Log message
+            logMessage('Viscunam drank coffee and feels energized! (-30 sleepiness)', 'client');
             break;
             
         case 'STATUS':
@@ -167,8 +200,36 @@ function handleServerMessage(message) {
             
             if (statusCode === '200') {
                 logMessage(`Success: ${statusMessage}`, 'server');
+                
+                // If this is a response to a COFFEE action, update the pet
+                if (params.action === ACTIONS.COFFEE) {
+                    // Reduce sleepiness
+                    modifySleepiness(-30);
+                    
+                    // Increase happiness slightly
+                    modifyHappiness(5);
+                    
+                    // Update status
+                    updatePetStatus();
+                    updateUI();
+                    
+                    // Log message
+                    logMessage('Viscunam drank coffee and feels energized! (-30 sleepiness)', 'client');
+                }
             } else {
                 logMessage(`Error (${statusCode}): ${statusMessage}`, 'error');
+                
+                // If this is a response to a COFFEE action with status 400, show a specific message
+                if (params.action === ACTIONS.COFFEE && statusCode === '400') {
+                    // Show a message that Viscunam doesn't need coffee
+                    logMessage('Viscunam doesn\'t want any more coffee right now!', 'client');
+                    
+                    // Maybe add a visual indication that the coffee was rejected
+                    petSprite.classList.add('shake');
+                    setTimeout(() => {
+                        petSprite.classList.remove('shake');
+                    }, 500);
+                }
             }
             break;
             
@@ -181,6 +242,7 @@ function handleServerMessage(message) {
 function updateGameState() {
     const currentTime = Date.now();
     const timeSinceLastFed = (currentTime - gameState.lastFed) / 1000; // in seconds
+    const timeSinceLastSlept = (currentTime - gameState.lastSlept) / 1000; // in seconds
     
     // Decrease hunger over time (1 point per 5 seconds)
     gameState.hunger = Math.max(0, gameState.hunger - (timeSinceLastFed / 5));
@@ -194,6 +256,25 @@ function updateGameState() {
         gameState.happiness = Math.max(0, gameState.happiness - (timeSinceLastFed / 10));
     }
     
+    // Increase sleepiness over time (1 point per 10 seconds)
+    if (gameState.isSleeping) {
+        // Decrease sleepiness while sleeping (5 points per second)
+        gameState.sleepiness = Math.max(0, gameState.sleepiness - (timeSinceLastFed * 5));
+        
+        // Wake up automatically when fully rested
+        if (gameState.sleepiness === 0 && gameState.isSleeping) {
+            toggleSleep(); // Wake up
+        }
+    } else {
+        // Increase sleepiness while awake
+        gameState.sleepiness = Math.min(100, gameState.sleepiness + (timeSinceLastFed / 10));
+        
+        // Walking makes Viscunam more tired
+        if (gameState.isWalking) {
+            gameState.sleepiness = Math.min(100, gameState.sleepiness + (timeSinceLastFed / 20));
+        }
+    }
+    
     // Update pet status based on stats
     updatePetStatus();
     
@@ -201,7 +282,7 @@ function updateGameState() {
     gameState.lastFed = currentTime;
     
     // Handle continuous exploration
-    if (gameState.isExploring && !gameState.userInteracted) {
+    if (gameState.isExploring && !gameState.userInteracted && !gameState.isSleeping) {
         if (!gameState.isWalking) {
             // If paused, count down pause time
             if (gameState.pauseTime > 0) {
@@ -234,8 +315,15 @@ function updateGameState() {
 
 // Update pet status based on current stats
 function updatePetStatus() {
+    // If sleeping or very sleepy, status is slumber
+    if (gameState.isSleeping || gameState.sleepiness > 80) {
+        gameState.status = 'slumber';
+        return;
+    }
+    
+    // Then check hunger and happiness
     if (gameState.hunger < 30) {
-        gameState.status = 'slumber'; // Pet is hungry and tired
+        gameState.status = 'normal'; // Pet is hungry but not sleepy
     } else if (gameState.happiness > 70) {
         gameState.status = 'happi'; // Pet is happy
     } else {
@@ -307,99 +395,93 @@ function animateCakeFeeding() {
     }, 800);
 }
 
-// Setup drag-and-drop functionality
-function setupDragAndDrop() {
-    let isDragging = false;
-    let offsetX, offsetY;
-    let draggedCake = null;
-    
-    // Make sure the cake sprite is draggable
-    cakeSprite.draggable = true;
-    cakeSprite.style.pointerEvents = 'auto';
-    
-    // Log to confirm setup
-    if (gameState.debugMode) {
-        logMessage('Debug: Setting up drag-and-drop for cake', 'client');
-    }
+// Variables for coffee drag and drop
+let isDraggingCoffee = false;
+let draggedCoffee = null;
+let coffeeOffsetX = 0;
+let coffeeOffsetY = 0;
+
+// Initialize coffee drag and drop
+function initCoffeeDragDrop() {
+    // Make coffee draggable
+    coffeeSprite.setAttribute('draggable', 'true');
     
     // Drag start
-    cakeSprite.addEventListener('dragstart', (e) => {
-        // Required for Firefox
-        e.dataTransfer.setData('text/plain', '');
+    coffeeSprite.addEventListener('dragstart', (e) => {
+        console.log('Coffee drag start');
+        e.dataTransfer.setData('text/plain', 'coffee');
         e.dataTransfer.effectAllowed = 'move';
         
-        // Mark as dragging
-        cakeContainer.classList.add('dragging');
-        isDragging = true;
-        
-        if (gameState.debugMode) {
-            logMessage('Debug: Cake drag started', 'client');
-        }
-    });
-    
-    // Drag end
-    cakeSprite.addEventListener('dragend', (e) => {
-        cakeContainer.classList.remove('dragging');
-        petContainer.classList.remove('can-feed');
-        isDragging = false;
-        
-        if (gameState.debugMode) {
-            logMessage('Debug: Cake drag ended', 'client');
-        }
-    });
-    
-    // Drag over pet
-    petContainer.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        petContainer.classList.add('can-feed');
-    });
-    
-    // Drag leave pet
-    petContainer.addEventListener('dragleave', (e) => {
-        petContainer.classList.remove('can-feed');
-    });
-    
-    // Drop on pet
-    petContainer.addEventListener('drop', (e) => {
-        e.preventDefault();
-        petContainer.classList.remove('can-feed');
-        
-        // Feed the pet with animation
-        animateCakeFeeding();
+        // Create a custom drag image
+        const dragIcon = document.createElement('img');
+        dragIcon.src = coffeeSprite.src;
+        dragIcon.style.width = '40px';
+        dragIcon.style.height = '40px';
+        e.dataTransfer.setDragImage(dragIcon, 20, 20);
     });
     
     // Alternative touch/mouse implementation for better mobile support
-    cakeSprite.addEventListener('mousedown', (e) => {
+    coffeeSprite.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return; // Only left mouse button
         
         e.preventDefault();
         
         // Create a clone for dragging
-        draggedCake = cakeSprite.cloneNode(true);
-        document.body.appendChild(draggedCake);
+        draggedCoffee = coffeeSprite.cloneNode(true);
+        document.body.appendChild(draggedCoffee);
         
         // Style the clone
-        draggedCake.style.position = 'fixed';
-        draggedCake.style.zIndex = '1000';
-        draggedCake.style.opacity = '0.7';
-        draggedCake.style.pointerEvents = 'none';
+        draggedCoffee.style.position = 'fixed';
+        draggedCoffee.style.zIndex = '1000';
+        draggedCoffee.style.opacity = '0.7';
+        draggedCoffee.style.pointerEvents = 'none';
+        draggedCoffee.style.width = '30px'; // Smaller size
+        draggedCoffee.style.height = '30px'; // Smaller size
         
         // Calculate offset
-        const rect = cakeSprite.getBoundingClientRect();
-        offsetX = e.clientX - rect.left;
-        offsetY = e.clientY - rect.top;
+        const rect = coffeeSprite.getBoundingClientRect();
+        coffeeOffsetX = e.clientX - rect.left;
+        coffeeOffsetY = e.clientY - rect.top;
         
         // Position the clone
-        draggedCake.style.left = `${e.clientX - offsetX}px`;
-        draggedCake.style.top = `${e.clientY - offsetY}px`;
+        draggedCoffee.style.left = `${e.clientX - coffeeOffsetX}px`;
+        draggedCoffee.style.top = `${e.clientY - coffeeOffsetY}px`;
         
-        isDragging = true;
+        isDraggingCoffee = true;
     });
     
-    document.addEventListener('mousemove', (e) => {
-        if (!isDragging || !draggedCake) return;
+    // Touch events for mobile
+    coffeeSprite.addEventListener('touchstart', (e) => {
+        e.preventDefault();
         
+        // Create a clone for dragging
+        draggedCoffee = coffeeSprite.cloneNode(true);
+        document.body.appendChild(draggedCoffee);
+        
+        // Style the clone
+        draggedCoffee.style.position = 'fixed';
+        draggedCoffee.style.zIndex = '1000';
+        draggedCoffee.style.opacity = '0.7';
+        draggedCoffee.style.pointerEvents = 'none';
+        
+        // Calculate offset
+        const touch = e.touches[0];
+        const rect = coffeeSprite.getBoundingClientRect();
+        coffeeOffsetX = touch.clientX - rect.left;
+        coffeeOffsetY = touch.clientY - rect.top;
+        
+        // Position the clone
+        draggedCoffee.style.left = `${touch.clientX - coffeeOffsetX}px`;
+        draggedCoffee.style.top = `${touch.clientY - coffeeOffsetY}px`;
+        
+        isDraggingCoffee = true;
+    });
+}
+
+// Update the mousemove event to handle both cake and coffee
+document.addEventListener('mousemove', (e) => {
+    // Handle cake dragging
+    if (isDragging && draggedCake) {
         // Move the clone
         draggedCake.style.left = `${e.clientX - offsetX}px`;
         draggedCake.style.top = `${e.clientY - offsetY}px`;
@@ -416,11 +498,33 @@ function setupDragAndDrop() {
         } else {
             petContainer.classList.remove('can-feed');
         }
-    });
+    }
     
-    document.addEventListener('mouseup', (e) => {
-        if (!isDragging || !draggedCake) return;
+    // Handle coffee dragging
+    if (isDraggingCoffee && draggedCoffee) {
+        // Move the clone
+        draggedCoffee.style.left = `${e.clientX - coffeeOffsetX}px`;
+        draggedCoffee.style.top = `${e.clientY - coffeeOffsetY}px`;
         
+        // Check if over pet
+        const petRect = petContainer.getBoundingClientRect();
+        if (
+            e.clientX >= petRect.left && 
+            e.clientX <= petRect.right && 
+            e.clientY >= petRect.top && 
+            e.clientY <= petRect.bottom
+        ) {
+            petContainer.classList.add('can-feed');
+        } else {
+            petContainer.classList.remove('can-feed');
+        }
+    }
+});
+
+// Update the mouseup event to handle both cake and coffee
+document.addEventListener('mouseup', (e) => {
+    // Handle cake drop
+    if (isDragging && draggedCake) {
         // Check if dropped on pet
         const petRect = petContainer.getBoundingClientRect();
         if (
@@ -443,38 +547,39 @@ function setupDragAndDrop() {
         
         petContainer.classList.remove('can-feed');
         isDragging = false;
-    });
+    }
     
-    // Touch events for mobile
-    cakeSprite.addEventListener('touchstart', (e) => {
-        e.preventDefault();
+    // Handle coffee drop
+    if (isDraggingCoffee && draggedCoffee) {
+        // Check if dropped on pet
+        const petRect = petContainer.getBoundingClientRect();
+        if (
+            e.clientX >= petRect.left && 
+            e.clientX <= petRect.right && 
+            e.clientY >= petRect.top && 
+            e.clientY <= petRect.bottom
+        ) {
+            // Remove the dragged clone
+            document.body.removeChild(draggedCoffee);
+            draggedCoffee = null;
+            
+            // Give coffee to the pet with animation
+            animateCoffeeFeeding();
+        } else if (draggedCoffee) {
+            // Remove the dragged clone
+            document.body.removeChild(draggedCoffee);
+            draggedCoffee = null;
+        }
         
-        // Create a clone for dragging
-        draggedCake = cakeSprite.cloneNode(true);
-        document.body.appendChild(draggedCake);
-        
-        // Style the clone
-        draggedCake.style.position = 'fixed';
-        draggedCake.style.zIndex = '1000';
-        draggedCake.style.opacity = '0.7';
-        draggedCake.style.pointerEvents = 'none';
-        
-        // Calculate offset
-        const rect = cakeSprite.getBoundingClientRect();
-        const touch = e.touches[0];
-        offsetX = touch.clientX - rect.left;
-        offsetY = touch.clientY - rect.top;
-        
-        // Position the clone
-        draggedCake.style.left = `${touch.clientX - offsetX}px`;
-        draggedCake.style.top = `${touch.clientY - offsetY}px`;
-        
-        isDragging = true;
-    });
-    
-    document.addEventListener('touchmove', (e) => {
-        if (!isDragging || !draggedCake) return;
-        
+        petContainer.classList.remove('can-feed');
+        isDraggingCoffee = false;
+    }
+});
+
+// Update the touchmove event to handle both cake and coffee
+document.addEventListener('touchmove', (e) => {
+    // Handle cake dragging
+    if (isDragging && draggedCake) {
         const touch = e.touches[0];
         
         // Move the clone
@@ -493,15 +598,46 @@ function setupDragAndDrop() {
         } else {
             petContainer.classList.remove('can-feed');
         }
-    });
+        
+        // Prevent scrolling
+        e.preventDefault();
+    }
     
-    document.addEventListener('touchend', (e) => {
-        if (!isDragging || !draggedCake) return;
+    // Handle coffee dragging
+    if (isDraggingCoffee && draggedCoffee) {
+        const touch = e.touches[0];
+        
+        // Move the clone
+        draggedCoffee.style.left = `${touch.clientX - coffeeOffsetX}px`;
+        draggedCoffee.style.top = `${touch.clientY - coffeeOffsetY}px`;
+        
+        // Check if over pet
+        const petRect = petContainer.getBoundingClientRect();
+        if (
+            touch.clientX >= petRect.left && 
+            touch.clientX <= petRect.right && 
+            touch.clientY >= petRect.top && 
+            touch.clientY <= petRect.bottom
+        ) {
+            petContainer.classList.add('can-feed');
+        } else {
+            petContainer.classList.remove('can-feed');
+        }
+        
+        // Prevent scrolling
+        e.preventDefault();
+    }
+});
+
+// Update the touchend event to handle both cake and coffee
+document.addEventListener('touchend', (e) => {
+    // Handle cake drop
+    if (isDragging && draggedCake) {
+        // Get the last touch position
+        const lastTouch = e.changedTouches[0];
         
         // Check if dropped on pet
         const petRect = petContainer.getBoundingClientRect();
-        const lastTouch = e.changedTouches[0];
-        
         if (
             lastTouch.clientX >= petRect.left && 
             lastTouch.clientX <= petRect.right && 
@@ -522,8 +658,54 @@ function setupDragAndDrop() {
         
         petContainer.classList.remove('can-feed');
         isDragging = false;
-    });
-}
+    }
+    
+    // Handle coffee drop
+    if (isDraggingCoffee && draggedCoffee) {
+        // Get the last touch position
+        const lastTouch = e.changedTouches[0];
+        
+        // Check if dropped on pet
+        const petRect = petContainer.getBoundingClientRect();
+        if (
+            lastTouch.clientX >= petRect.left && 
+            lastTouch.clientX <= petRect.right && 
+            lastTouch.clientY >= petRect.top && 
+            lastTouch.clientY <= petRect.bottom
+        ) {
+            // Remove the dragged clone
+            document.body.removeChild(draggedCoffee);
+            draggedCoffee = null;
+            
+            // Give coffee to the pet with animation
+            animateCoffeeFeeding();
+        } else if (draggedCoffee) {
+            // Remove the dragged clone
+            document.body.removeChild(draggedCoffee);
+            draggedCoffee = null;
+        }
+        
+        petContainer.classList.remove('can-feed');
+        isDraggingCoffee = false;
+    }
+});
+
+// Update the drop event on pet container to handle both cake and coffee
+petContainer.addEventListener('drop', (e) => {
+    e.preventDefault();
+    console.log('Drop on pet');
+    petContainer.classList.remove('can-feed');
+    
+    // Check what was dropped
+    const data = e.dataTransfer.getData('text/plain');
+    if (data === 'cake') {
+        // Feed the pet with cake
+        animateCakeFeeding();
+    } else if (data === 'coffee') {
+        // Give coffee to the pet
+        animateCoffeeFeeding();
+    }
+});
 
 // Pet the Viscunam (new interaction)
 function petTheViscunam() {
@@ -583,7 +765,7 @@ function toggleWalking() {
         logMessage('Viscunam stopped walking', 'client');
     } else {
         // Pick a random direction
-        gameState.direction = Math.random() > 0.5 ? 1 : -1;
+        gameState.direction = Math.random() > 0.5 ? { x: 1, y: 0 } : { x: -1, y: 0 };
         startWalking();
         logMessage('Viscunam started walking', 'client');
     }
@@ -691,74 +873,126 @@ function updateWalkAnimation() {
     petSprite.src = spriteFilename;
 }
 
-// Move Viscunam around
+// Move Viscunam based on current direction and speed
 function moveViscunam() {
-    if (!gameState.isWalking) return;
+    if (!gameState.isWalking || !gameState.targetPosition) return;
     
-    // If we have a target position, move towards it
-    if (gameState.targetPosition) {
-        const dx = gameState.targetPosition.x - gameState.position.x;
-        
-        // If we're close enough to the target, stop walking or pick a new target
-        if (Math.abs(dx) < 1) {
-            if (Math.random() < 0.7 && gameState.isExploring && !gameState.userInteracted) {
-                // 70% chance to immediately pick a new target when reaching destination
-                startWandering();
-            } else {
-                stopWalking();
-            }
-            return;
+    // Calculate direction to target
+    const dx = gameState.targetPosition.x - gameState.position.x;
+    const dy = gameState.targetPosition.y - gameState.position.y;
+    
+    // Calculate distance to target
+    const distance = Math.sqrt(dx*dx + dy*dy);
+    
+    // If we're close enough to the target, stop walking or pick a new target
+    if (distance < 1) {
+        if (gameState.isExploring && !gameState.userInteracted && Math.random() < 0.7) {
+            // 70% chance to pick a new target if we're exploring and not interacted with
+            pickRandomTarget();
+        } else {
+            stopWalking();
         }
-        
-        // Set direction based on target
-        gameState.direction = dx > 0 ? 1 : -1;
+        return;
     }
     
-    // Calculate new position with smoother movement
-    gameState.position.x += gameState.moveSpeed * gameState.direction;
+    // Normalize direction vector
+    gameState.direction = {
+        x: dx / distance,
+        y: dy / distance
+    };
     
-    // Check boundaries and change direction if needed
-    const margin = 5; // percentage from edge (reduced to allow more exploration area)
-    if (gameState.position.x > (100 - margin)) {
-        gameState.position.x = 100 - margin;
-        gameState.direction = -1; // change direction to left
-        
-        // If we hit a boundary during autonomous movement, pick a new target
-        if (gameState.targetPosition) {
-            startWandering();
-        }
-    } else if (gameState.position.x < margin) {
-        gameState.position.x = margin;
-        gameState.direction = 1; // change direction to right
-        
-        // If we hit a boundary during autonomous movement, pick a new target
-        if (gameState.targetPosition) {
-            startWandering();
-        }
+    // Define boundaries
+    const margin = 5; // percentage from edge
+    const yMargin = 10; // percentage from top/bottom
+    
+    // Calculate new position with boundary checks
+    let newX = gameState.position.x + gameState.moveSpeed * gameState.direction.x;
+    let newY = gameState.position.y + gameState.moveSpeed * gameState.direction.y;
+    
+    // Check if new position would be out of bounds
+    let hitBoundary = false;
+    
+    // X-axis boundaries
+    if (newX > 100 - margin) {
+        newX = 100 - margin;
+        hitBoundary = true;
+    } else if (newX < margin) {
+        newX = margin;
+        hitBoundary = true;
+    }
+    
+    // Y-axis boundaries
+    if (newY > 100 - yMargin) {
+        newY = 100 - yMargin;
+        hitBoundary = true;
+    } else if (newY < yMargin) {
+        newY = yMargin;
+        hitBoundary = true;
     }
     
     // Update position
-    petContainer.style.left = `${gameState.position.x}%`;
+    gameState.position.x = newX;
+    gameState.position.y = newY;
     
-    // No flipping - just center the pet container
-    petContainer.style.transform = 'translate(-50%, -50%)';
+    // If we hit a boundary, either pick a new target or stop walking
+    if (hitBoundary) {
+        if (gameState.isExploring && Math.random() < gameState.restlessness) {
+            // Start wandering in a new direction
+            startWandering();
+        } else {
+            // Stop at the boundary
+            stopWalking();
+        }
+    }
+    
+    // Update position in the DOM
+    petContainer.style.left = `${gameState.position.x}%`;
+    petContainer.style.top = `${gameState.position.y}%`;
+    
+    // Apply flip based on movement direction
+    if (gameState.isWalking && gameState.direction.x > 0) {
+        // Moving right - flip the sprite
+        petContainer.style.transform = 'translate(-50%, -50%) scaleX(-1)';
+    } else if (gameState.isWalking) {
+        // Moving left - normal orientation
+        petContainer.style.transform = 'translate(-50%, -50%)';
+    } else {
+        // Not walking - use last direction for orientation
+        petContainer.style.transform = gameState.direction.x >= 0 ? 
+            'translate(-50%, -50%) scaleX(-1)' : 'translate(-50%, -50%)';
+    }
+    
+    // Debug info
+    if (gameState.debugMode) {
+        logMessage(`Position: x=${gameState.position.x.toFixed(1)}, y=${gameState.position.y.toFixed(1)}`, 'client');
+    }
 }
 
-// Make Viscunam walk to a specific point
+// Walk to a specific point on the screen
 function walkToPoint(x, y) {
     // Convert click coordinates to percentage of screen
-    const containerRect = gameContainer.getBoundingClientRect();
-    const targetX = ((x - containerRect.left) / containerRect.width) * 100;
+    const targetX = (x / window.innerWidth) * 100;
+    const targetY = (y / window.innerHeight) * 100;
     
-    // Set target position
-    gameState.targetPosition = { x: targetX, y: gameState.position.y };
+    // Ensure target is within bounds
+    const margin = 5; // percentage from edge
+    const yMargin = 10; // percentage from top/bottom
     
-    // Determine direction
-    if (targetX > gameState.position.x) {
-        gameState.direction = 1; // right
-    } else {
-        gameState.direction = -1; // left
-    }
+    const boundedX = Math.max(margin, Math.min(100 - margin, targetX));
+    const boundedY = Math.max(yMargin, Math.min(100 - yMargin, targetY));
+    
+    // Set as target
+    gameState.targetPosition = { x: boundedX, y: boundedY };
+    
+    // Calculate direction vector
+    const dx = boundedX - gameState.position.x;
+    const dy = boundedY - gameState.position.y;
+    
+    // Set initial direction
+    gameState.direction = { 
+        x: dx, 
+        y: dy 
+    };
     
     // Start walking
     startWalking();
@@ -775,31 +1009,54 @@ function startWandering() {
     // Don't interrupt if user is interacting
     if (gameState.userInteracted) return;
     
-    // Don't start if not in exploration mode
-    if (!gameState.isExploring) return;
+    // Don't start if not in exploration mode or if sleeping
+    if (!gameState.isExploring || gameState.isSleeping) return;
     
-    // Pick a random position on the screen - more varied destinations
-    const margin = 10; // percentage from edge
+    const margin = 5; // percentage from edge
+    const yMargin = 10; // percentage from top/bottom
     
-    // Choose between targeted exploration or completely random position
-    let randomX;
+    let randomX, randomY;
+    
+    // 70% chance: Pick a completely random position
     if (Math.random() < 0.7) {
-        // 70% chance: Pick a completely random position across the screen
         randomX = margin + Math.random() * (100 - 2 * margin);
+        randomY = yMargin + Math.random() * (100 - 2 * yMargin);
     } else {
         // 30% chance: Pick a position near current location
         const centerX = gameState.position.x;
-        const range = 30; // smaller range for local exploration
-        const minX = Math.max(margin, centerX - range);
-        const maxX = Math.min(100 - margin, centerX + range);
+        const centerY = gameState.position.y;
+        
+        const rangeX = 30; // smaller range for local exploration
+        const rangeY = 20;
+        
+        const minX = Math.max(margin, centerX - rangeX);
+        const maxX = Math.min(100 - margin, centerX + rangeX);
         randomX = minX + Math.random() * (maxX - minX);
+        
+        const minY = Math.max(yMargin, centerY - rangeY);
+        const maxY = Math.min(100 - yMargin, centerY + rangeY);
+        randomY = minY + Math.random() * (maxY - minY);
     }
     
-    // Set as target
-    gameState.targetPosition = { x: randomX, y: gameState.position.y };
+    // Ensure positions are within bounds (extra safety check)
+    randomX = Math.max(margin, Math.min(100 - margin, randomX));
+    randomY = Math.max(yMargin, Math.min(100 - yMargin, randomY));
     
-    // Determine direction
-    gameState.direction = randomX > gameState.position.x ? 1 : -1;
+    // Set as target
+    gameState.targetPosition = { 
+        x: randomX, 
+        y: randomY 
+    };
+    
+    // Calculate direction vector
+    const dx = randomX - gameState.position.x;
+    const dy = randomY - gameState.position.y;
+    
+    // Set initial direction
+    gameState.direction = { 
+        x: dx, 
+        y: dy 
+    };
     
     // Start walking
     startWalking();
@@ -810,6 +1067,7 @@ function updateUI() {
     // Update progress bars
     hungerBar.style.width = `${gameState.hunger}%`;
     happinessBar.style.width = `${gameState.happiness}%`;
+    sleepinessBar.style.width = `${gameState.sleepiness}%`;
     
     // Determine sprite filename based on status and walking state
     let spriteFilename;
@@ -850,8 +1108,18 @@ function updateUI() {
     petContainer.style.left = `${gameState.position.x}%`;
     petContainer.style.top = `${gameState.position.y}%`;
     
-    // No flipping - just center the pet container
-    petContainer.style.transform = 'translate(-50%, -50%)';
+    // Apply flip based on movement direction
+    if (gameState.isWalking && gameState.direction.x > 0) {
+        // Moving right - flip the sprite
+        petContainer.style.transform = 'translate(-50%, -50%) scaleX(-1)';
+    } else if (gameState.isWalking) {
+        // Moving left - normal orientation
+        petContainer.style.transform = 'translate(-50%, -50%)';
+    } else {
+        // Not walking - use last direction for orientation
+        petContainer.style.transform = gameState.direction.x >= 0 ? 
+            'translate(-50%, -50%) scaleX(-1)' : 'translate(-50%, -50%)';
+    }
     
     // Update hungry indicator
     if (gameState.hunger < 70) {
@@ -860,8 +1128,18 @@ function updateUI() {
         petContainer.classList.remove('hungry');
     }
     
+    // Update sleepy indicator
+    if (gameState.sleepiness > 70 && !gameState.isSleeping) {
+        petContainer.classList.add('sleepy');
+    } else {
+        petContainer.classList.remove('sleepy');
+    }
+    
     // Update feed button state
     feedButton.disabled = !gameState.connected && gameState.hunger >= 100;
+    
+    // Update sleep button text
+    sleepButton.textContent = gameState.isSleeping ? 'Wake Up' : 'Sleep';
     
     // Update explore button state
     if (gameState.isExploring) {
@@ -889,13 +1167,26 @@ function updateUI() {
 function logMessage(message, type = 'info') {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message', type);
-    messageElement.textContent = message;
+    
+    // Add timestamp
+    const now = new Date();
+    const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    
+    // Create timestamp span with bold styling
+    const timestampSpan = document.createElement('span');
+    timestampSpan.classList.add('timestamp');
+    timestampSpan.textContent = `[${timestamp}] `;
+    timestampSpan.style.fontWeight = 'bold';
+    
+    // Add timestamp and message
+    messageElement.appendChild(timestampSpan);
+    messageElement.appendChild(document.createTextNode(message));
     
     messageContainer.appendChild(messageElement);
     messageContainer.scrollTop = messageContainer.scrollHeight;
     
-    // Limit the number of messages (keep last 50)
-    while (messageContainer.children.length > 50) {
+    // Limit the number of messages (keep last 100)
+    while (messageContainer.children.length > 100) {
         messageContainer.removeChild(messageContainer.firstChild);
     }
 }
@@ -939,6 +1230,11 @@ cakeContainer.addEventListener('click', (event) => {
 exploreButton.addEventListener('click', (event) => {
     event.preventDefault();
     toggleExploration();
+});
+
+sleepButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    toggleSleep();
 });
 
 petContainer.addEventListener('click', (event) => {
@@ -987,6 +1283,26 @@ happinessFullButton.addEventListener('click', (event) => {
     setHappiness(100);
 });
 
+sleepinessDecreaseButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    modifySleepiness(-20);
+});
+
+sleepinessIncreaseButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    modifySleepiness(20);
+});
+
+sleepinessZeroButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    setSleepiness(0);
+});
+
+sleepinessFullButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    setSleepiness(100);
+});
+
 // Double click on pet to toggle walking
 petContainer.addEventListener('dblclick', (event) => {
     // Prevent default behavior (text selection)
@@ -1013,7 +1329,10 @@ function init() {
     petContainer.style.position = 'absolute';
     petContainer.style.left = `${gameState.position.x}%`;
     petContainer.style.top = `${gameState.position.y}%`;
-    petContainer.style.transform = 'translate(-50%, -50%)';
+    
+    // Set initial orientation based on direction
+    petContainer.style.transform = gameState.direction.x >= 0 ? 
+        'translate(-50%, -50%) scaleX(-1)' : 'translate(-50%, -50%)';
     
     // Set initial button states
     if (gameState.isExploring) {
@@ -1029,6 +1348,10 @@ function init() {
         petSprite.src = 'sprite/normal.png';
         logMessage('Debug: Fixed initial sprite to normal.png', 'client');
     }
+    
+    // Make sure coffee sprite is draggable
+    coffeeSprite.draggable = true;
+    coffeeSprite.style.pointerEvents = 'auto';
     
     // Setup drag-and-drop for feeding
     setupDragAndDrop();
@@ -1048,12 +1371,11 @@ function init() {
     
     // Disable drag start on images except for cake sprite
     document.addEventListener('dragstart', event => {
+        console.log('Dragstart on', event.target.id);
+        
         // Allow cake to be dragged
-        if (event.target === cakeSprite) {
-            // Allow the drag to proceed
-            if (gameState.debugMode) {
-                logMessage('Debug: Allowing cake to be dragged', 'client');
-            }
+        if (event.target.id === 'cake-sprite') {
+            console.log('Allowing cake to be dragged');
             return true;
         } else {
             // Prevent dragging for other elements
@@ -1084,6 +1406,17 @@ function init() {
             startWandering();
         }
     }, 300); // Check more frequently
+    
+    // Add direct click handlers for items
+    cakeContainer.addEventListener('click', () => {
+        console.log('Cake container clicked');
+        animateCakeFeeding();
+    });
+    
+    coffeeContainer.addEventListener('click', () => {
+        console.log('Coffee container clicked');
+        animateCoffeeFeeding();
+    });
 }
 
 // Global variables for intervals
@@ -1174,4 +1507,589 @@ logCurrentSpriteButton.addEventListener('click', (event) => {
 toggleDebugButton.addEventListener('click', (event) => {
     event.preventDefault();
     toggleDebugMenu();
+});
+
+// Pick a random target within exploration range
+function pickRandomTarget() {
+    if (!gameState.isExploring || gameState.isSleeping) return;
+    
+    const margin = 5; // percentage from edge
+    const yMargin = 10; // percentage from top/bottom
+    
+    // Calculate random position within exploration range
+    let randomX = Math.max(0, Math.min(100, 
+        gameState.position.x + (Math.random() * 2 - 1) * gameState.explorationRange.x
+    ));
+    
+    let randomY = Math.max(0, Math.min(100, 
+        gameState.position.y + (Math.random() * 2 - 1) * gameState.explorationRange.y
+    ));
+    
+    // Ensure positions are within bounds
+    randomX = Math.max(margin, Math.min(100 - margin, randomX));
+    randomY = Math.max(yMargin, Math.min(100 - yMargin, randomY));
+    
+    // Set as target
+    gameState.targetPosition = { 
+        x: randomX, 
+        y: randomY 
+    };
+    
+    // Calculate direction vector
+    const dx = randomX - gameState.position.x;
+    const dy = randomY - gameState.position.y;
+    
+    // Set initial direction
+    gameState.direction = { 
+        x: dx, 
+        y: dy 
+    };
+    
+    // Start walking
+    startWalking();
+    
+    if (gameState.debugMode) {
+        console.log(`Picked random target: (${randomX.toFixed(1)}, ${randomY.toFixed(1)})`);
+    }
+}
+
+// Modify sleepiness by a certain amount
+function modifySleepiness(amount) {
+    gameState.sleepiness = Math.max(0, Math.min(100, gameState.sleepiness + amount));
+    updateUI();
+}
+
+// Set sleepiness to a specific value
+function setSleepiness(value) {
+    gameState.sleepiness = Math.max(0, Math.min(100, value));
+    updateUI();
+}
+
+// Put Viscunam to sleep or wake him up
+function toggleSleep() {
+    if (gameState.isSleeping) {
+        // Wake up
+        gameState.isSleeping = false;
+        gameState.status = 'normal';
+        setSleepiness(0);
+        gameState.lastSlept = Date.now();
+        logMessage('Viscunam woke up and feels refreshed!', 'client');
+        sleepButton.textContent = 'Sleep';
+        
+        // Resume exploration if it was active
+        if (gameState.isExploring) {
+            setTimeout(() => {
+                startWandering();
+            }, 1000);
+        }
+    } else {
+        // Go to sleep
+        stopWalking();
+        gameState.isSleeping = true;
+        gameState.status = 'slumber';
+        logMessage('Viscunam is now sleeping...', 'client');
+        sleepButton.textContent = 'Wake Up';
+    }
+    
+    updateUI();
+}
+
+// Give coffee to Viscunam to reduce sleepiness
+function giveCoffee() {
+    if (gameState.connected) {
+        // Send coffee action to server
+        sendMessage(ACTIONS.COFFEE);
+    } else {
+        // Local mode
+        // Reduce sleepiness
+        modifySleepiness(-30);
+        
+        // Increase happiness slightly
+        modifyHappiness(5);
+        
+        // Update status
+        updatePetStatus();
+        updateUI();
+        
+        // Log message
+        logMessage('Viscunam drank coffee and feels energized! (-30 sleepiness)', 'client');
+    }
+    
+    // Mark as user interaction
+    gameState.userInteracted = true;
+    gameState.userInteractionTimer = 0;
+}
+
+// Animate coffee being given to Viscunam
+function animateCoffeeFeeding() {
+    // Create a clone of the coffee
+    const coffeeClone = coffeeSprite.cloneNode(true);
+    document.body.appendChild(coffeeClone);
+    
+    // Position the clone at the original coffee's position
+    const coffeeRect = coffeeSprite.getBoundingClientRect();
+    const petRect = petSprite.getBoundingClientRect();
+    
+    coffeeClone.style.position = 'fixed';
+    coffeeClone.style.left = `${coffeeRect.left}px`;
+    coffeeClone.style.top = `${coffeeRect.top}px`;
+    coffeeClone.style.width = `${coffeeRect.width}px`;
+    coffeeClone.style.height = `${coffeeRect.height}px`;
+    coffeeClone.style.zIndex = '1000';
+    
+    // Calculate the target position (center of the pet)
+    const targetX = petRect.left + petRect.width / 2 - coffeeRect.left;
+    const targetY = petRect.top + petRect.height / 2 - coffeeRect.top;
+    
+    // Set the CSS variables for the animation
+    coffeeClone.style.setProperty('--target-x', `${targetX}px`);
+    coffeeClone.style.setProperty('--target-y', `${targetY}px`);
+    
+    // Add the animation class
+    coffeeClone.classList.add('float-to-pet');
+    
+    // Remove the clone after animation completes and give coffee
+    setTimeout(() => {
+        document.body.removeChild(coffeeClone);
+        giveCoffee();
+    }, 800);
+}
+
+// Setup drag-and-drop functionality for all items
+function setupDragAndDrop() {
+    // Variables for drag and drop
+    let isDragging = false;
+    let offsetX, offsetY;
+    let draggedCake = null;
+    let isDraggingCoffee = false;
+    let draggedCoffee = null;
+    let coffeeOffsetX = 0;
+    let coffeeOffsetY = 0;
+    
+    // Make sure the sprites are draggable
+    cakeSprite.draggable = true;
+    cakeSprite.style.pointerEvents = 'auto';
+    coffeeSprite.draggable = true;
+    coffeeSprite.style.pointerEvents = 'auto';
+    
+    // Log to confirm setup
+    console.log('Setting up drag-and-drop for cake and coffee');
+    
+    // Add a simple click handler as fallback for cake
+    cakeContainer.addEventListener('click', (e) => {
+        console.log('Cake clicked');
+        animateCakeFeeding();
+    });
+    
+    // Add a simple click handler as fallback for coffee
+    coffeeContainer.addEventListener('click', (e) => {
+        console.log('Coffee clicked');
+        animateCoffeeFeeding();
+    });
+    
+    // Cake drag start
+    cakeSprite.addEventListener('dragstart', (e) => {
+        console.log('Cake drag start');
+        // Required for Firefox
+        e.dataTransfer.setData('text/plain', 'cake');
+        e.dataTransfer.effectAllowed = 'move';
+        
+        // Mark as dragging
+        cakeContainer.classList.add('dragging');
+        isDragging = true;
+    });
+    
+    // Cake drag end
+    cakeSprite.addEventListener('dragend', (e) => {
+        console.log('Cake drag end');
+        cakeContainer.classList.remove('dragging');
+        petContainer.classList.remove('can-feed');
+        isDragging = false;
+    });
+    
+    // Coffee drag start
+    coffeeSprite.addEventListener('dragstart', (e) => {
+        console.log('Coffee drag start');
+        e.dataTransfer.setData('text/plain', 'coffee');
+        e.dataTransfer.effectAllowed = 'move';
+        
+        // Mark as dragging
+        coffeeContainer.classList.add('dragging');
+        isDraggingCoffee = true;
+    });
+    
+    // Coffee drag end
+    coffeeSprite.addEventListener('dragend', (e) => {
+        console.log('Coffee drag end');
+        coffeeContainer.classList.remove('dragging');
+        petContainer.classList.remove('can-feed');
+        isDraggingCoffee = false;
+    });
+    
+    // Drag over pet
+    petContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        console.log('Drag over pet');
+        e.dataTransfer.dropEffect = 'move';
+        petContainer.classList.add('can-feed');
+    });
+    
+    // Drag leave pet
+    petContainer.addEventListener('dragleave', (e) => {
+        console.log('Drag leave pet');
+        petContainer.classList.remove('can-feed');
+    });
+    
+    // Drop on pet
+    petContainer.addEventListener('drop', (e) => {
+        e.preventDefault();
+        console.log('Drop on pet');
+        petContainer.classList.remove('can-feed');
+        
+        // Check what was dropped
+        const data = e.dataTransfer.getData('text/plain');
+        if (data === 'cake') {
+            // Feed the pet with cake
+            animateCakeFeeding();
+        } else if (data === 'coffee') {
+            // Give coffee to the pet
+            animateCoffeeFeeding();
+        }
+    });
+    
+    // Mouse down for cake
+    cakeSprite.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // Only left mouse button
+        
+        e.preventDefault();
+        
+        // Create a clone for dragging
+        draggedCake = cakeSprite.cloneNode(true);
+        document.body.appendChild(draggedCake);
+        
+        // Style the clone
+        draggedCake.style.position = 'fixed';
+        draggedCake.style.zIndex = '1000';
+        draggedCake.style.opacity = '0.7';
+        draggedCake.style.pointerEvents = 'none';
+        
+        // Calculate offset
+        const rect = cakeSprite.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        
+        // Position the clone
+        draggedCake.style.left = `${e.clientX - offsetX}px`;
+        draggedCake.style.top = `${e.clientY - offsetY}px`;
+        
+        isDragging = true;
+    });
+    
+    // Mouse down for coffee
+    coffeeSprite.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // Only left mouse button
+        
+        e.preventDefault();
+        
+        // Create a clone for dragging
+        draggedCoffee = coffeeSprite.cloneNode(true);
+        document.body.appendChild(draggedCoffee);
+        
+        // Style the clone
+        draggedCoffee.style.position = 'fixed';
+        draggedCoffee.style.zIndex = '1000';
+        draggedCoffee.style.opacity = '0.7';
+        draggedCoffee.style.pointerEvents = 'none';
+        draggedCoffee.style.width = '30px'; // Smaller size
+        draggedCoffee.style.height = '30px'; // Smaller size
+        
+        // Calculate offset
+        const rect = coffeeSprite.getBoundingClientRect();
+        coffeeOffsetX = e.clientX - rect.left;
+        coffeeOffsetY = e.clientY - rect.top;
+        
+        // Position the clone
+        draggedCoffee.style.left = `${e.clientX - coffeeOffsetX}px`;
+        draggedCoffee.style.top = `${e.clientY - coffeeOffsetY}px`;
+        
+        isDraggingCoffee = true;
+    });
+    
+    // Mouse move event
+    document.addEventListener('mousemove', (e) => {
+        // Handle cake dragging
+        if (isDragging && draggedCake) {
+            // Move the clone
+            draggedCake.style.left = `${e.clientX - offsetX}px`;
+            draggedCake.style.top = `${e.clientY - offsetY}px`;
+            
+            // Check if over pet
+            const petRect = petContainer.getBoundingClientRect();
+            if (
+                e.clientX >= petRect.left && 
+                e.clientX <= petRect.right && 
+                e.clientY >= petRect.top && 
+                e.clientY <= petRect.bottom
+            ) {
+                petContainer.classList.add('can-feed');
+            } else {
+                petContainer.classList.remove('can-feed');
+            }
+        }
+        
+        // Handle coffee dragging
+        if (isDraggingCoffee && draggedCoffee) {
+            // Move the clone
+            draggedCoffee.style.left = `${e.clientX - coffeeOffsetX}px`;
+            draggedCoffee.style.top = `${e.clientY - coffeeOffsetY}px`;
+            
+            // Check if over pet
+            const petRect = petContainer.getBoundingClientRect();
+            if (
+                e.clientX >= petRect.left && 
+                e.clientX <= petRect.right && 
+                e.clientY >= petRect.top && 
+                e.clientY <= petRect.bottom
+            ) {
+                petContainer.classList.add('can-feed');
+            } else {
+                petContainer.classList.remove('can-feed');
+            }
+        }
+    });
+    
+    // Mouse up event
+    document.addEventListener('mouseup', (e) => {
+        // Handle cake drop
+        if (isDragging && draggedCake) {
+            // Check if dropped on pet
+            const petRect = petContainer.getBoundingClientRect();
+            if (
+                e.clientX >= petRect.left && 
+                e.clientX <= petRect.right && 
+                e.clientY >= petRect.top && 
+                e.clientY <= petRect.bottom
+            ) {
+                // Remove the dragged clone
+                document.body.removeChild(draggedCake);
+                draggedCake = null;
+                
+                // Feed the pet with animation
+                animateCakeFeeding();
+            } else if (draggedCake) {
+                // Remove the dragged clone
+                document.body.removeChild(draggedCake);
+                draggedCake = null;
+            }
+            
+            petContainer.classList.remove('can-feed');
+            isDragging = false;
+        }
+        
+        // Handle coffee drop
+        if (isDraggingCoffee && draggedCoffee) {
+            // Check if dropped on pet
+            const petRect = petContainer.getBoundingClientRect();
+            if (
+                e.clientX >= petRect.left && 
+                e.clientX <= petRect.right && 
+                e.clientY >= petRect.top && 
+                e.clientY <= petRect.bottom
+            ) {
+                // Remove the dragged clone
+                document.body.removeChild(draggedCoffee);
+                draggedCoffee = null;
+                
+                // Give coffee to the pet with animation
+                animateCoffeeFeeding();
+            } else if (draggedCoffee) {
+                // Remove the dragged clone
+                document.body.removeChild(draggedCoffee);
+                draggedCoffee = null;
+            }
+            
+            petContainer.classList.remove('can-feed');
+            isDraggingCoffee = false;
+        }
+    });
+    
+    // Touch events for cake
+    cakeSprite.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        
+        // Create a clone for dragging
+        draggedCake = cakeSprite.cloneNode(true);
+        document.body.appendChild(draggedCake);
+        
+        // Style the clone
+        draggedCake.style.position = 'fixed';
+        draggedCake.style.zIndex = '1000';
+        draggedCake.style.opacity = '0.7';
+        draggedCake.style.pointerEvents = 'none';
+        
+        // Calculate offset
+        const touch = e.touches[0];
+        const rect = cakeSprite.getBoundingClientRect();
+        offsetX = touch.clientX - rect.left;
+        offsetY = touch.clientY - rect.top;
+        
+        // Position the clone
+        draggedCake.style.left = `${touch.clientX - offsetX}px`;
+        draggedCake.style.top = `${touch.clientY - offsetY}px`;
+        
+        isDragging = true;
+    });
+    
+    // Touch events for coffee
+    coffeeSprite.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        
+        // Create a clone for dragging
+        draggedCoffee = coffeeSprite.cloneNode(true);
+        document.body.appendChild(draggedCoffee);
+        
+        // Style the clone
+        draggedCoffee.style.position = 'fixed';
+        draggedCoffee.style.zIndex = '1000';
+        draggedCoffee.style.opacity = '0.7';
+        draggedCoffee.style.pointerEvents = 'none';
+        draggedCoffee.style.width = '30px'; // Smaller size
+        draggedCoffee.style.height = '30px'; // Smaller size
+        
+        // Calculate offset
+        const touch = e.touches[0];
+        const rect = coffeeSprite.getBoundingClientRect();
+        coffeeOffsetX = touch.clientX - rect.left;
+        coffeeOffsetY = touch.clientY - rect.top;
+        
+        // Position the clone
+        draggedCoffee.style.left = `${touch.clientX - coffeeOffsetX}px`;
+        draggedCoffee.style.top = `${touch.clientY - coffeeOffsetY}px`;
+        
+        isDraggingCoffee = true;
+    });
+    
+    // Touch move event
+    document.addEventListener('touchmove', (e) => {
+        // Handle cake dragging
+        if (isDragging && draggedCake) {
+            const touch = e.touches[0];
+            
+            // Move the clone
+            draggedCake.style.left = `${touch.clientX - offsetX}px`;
+            draggedCake.style.top = `${touch.clientY - offsetY}px`;
+            
+            // Check if over pet
+            const petRect = petContainer.getBoundingClientRect();
+            if (
+                touch.clientX >= petRect.left && 
+                touch.clientX <= petRect.right && 
+                touch.clientY >= petRect.top && 
+                touch.clientY <= petRect.bottom
+            ) {
+                petContainer.classList.add('can-feed');
+            } else {
+                petContainer.classList.remove('can-feed');
+            }
+            
+            // Prevent scrolling
+            e.preventDefault();
+        }
+        
+        // Handle coffee dragging
+        if (isDraggingCoffee && draggedCoffee) {
+            const touch = e.touches[0];
+            
+            // Move the clone
+            draggedCoffee.style.left = `${touch.clientX - coffeeOffsetX}px`;
+            draggedCoffee.style.top = `${touch.clientY - coffeeOffsetY}px`;
+            
+            // Check if over pet
+            const petRect = petContainer.getBoundingClientRect();
+            if (
+                touch.clientX >= petRect.left && 
+                touch.clientX <= petRect.right && 
+                touch.clientY >= petRect.top && 
+                touch.clientY <= petRect.bottom
+            ) {
+                petContainer.classList.add('can-feed');
+            } else {
+                petContainer.classList.remove('can-feed');
+            }
+            
+            // Prevent scrolling
+            e.preventDefault();
+        }
+    });
+    
+    // Touch end event
+    document.addEventListener('touchend', (e) => {
+        // Handle cake drop
+        if (isDragging && draggedCake) {
+            // Get the last touch position
+            const lastTouch = e.changedTouches[0];
+            
+            // Check if dropped on pet
+            const petRect = petContainer.getBoundingClientRect();
+            if (
+                lastTouch.clientX >= petRect.left && 
+                lastTouch.clientX <= petRect.right && 
+                lastTouch.clientY >= petRect.top && 
+                lastTouch.clientY <= petRect.bottom
+            ) {
+                // Remove the dragged clone
+                document.body.removeChild(draggedCake);
+                draggedCake = null;
+                
+                // Feed the pet with animation
+                animateCakeFeeding();
+            } else if (draggedCake) {
+                // Remove the dragged clone
+                document.body.removeChild(draggedCake);
+                draggedCake = null;
+            }
+            
+            petContainer.classList.remove('can-feed');
+            isDragging = false;
+        }
+        
+        // Handle coffee drop
+        if (isDraggingCoffee && draggedCoffee) {
+            // Get the last touch position
+            const lastTouch = e.changedTouches[0];
+            
+            // Check if dropped on pet
+            const petRect = petContainer.getBoundingClientRect();
+            if (
+                lastTouch.clientX >= petRect.left && 
+                lastTouch.clientX <= petRect.right && 
+                lastTouch.clientY >= petRect.top && 
+                lastTouch.clientY <= petRect.bottom
+            ) {
+                // Remove the dragged clone
+                document.body.removeChild(draggedCoffee);
+                draggedCoffee = null;
+                
+                // Give coffee to the pet with animation
+                animateCoffeeFeeding();
+            } else if (draggedCoffee) {
+                // Remove the dragged clone
+                document.body.removeChild(draggedCoffee);
+                draggedCoffee = null;
+            }
+            
+            petContainer.classList.remove('can-feed');
+            isDraggingCoffee = false;
+        }
+    });
+}
+
+// Clear messages button
+clearMessagesBtn.addEventListener('click', () => {
+    // Clear all messages
+    while (messageContainer.firstChild) {
+        messageContainer.removeChild(messageContainer.firstChild);
+    }
+    // Add a confirmation message
+    logMessage('Messages cleared', 'client');
 }); 

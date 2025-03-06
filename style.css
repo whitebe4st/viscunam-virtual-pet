@@ -10,6 +10,11 @@
     -webkit-touch-callout: none; /* iOS Safari */
 }
 
+/* Hide all decorative elements */
+.sun, .cloud, .flower, .butterfly {
+    display: none !important;
+}
+
 /* Apply to all images to prevent dragging */
 img {
     -webkit-user-drag: none;
@@ -39,8 +44,9 @@ button, .pet-container, .controls, .debug-menu, .toggle-debug-btn {
 }
 
 body {
-    background-color: #a8e6cf; /* Light green for field */
-    background-image: linear-gradient(to bottom, #87ceeb 0%, #87ceeb 50%, #a8e6cf 50%, #a8e6cf 100%); /* Sky and field */
+    background-image: url('sprite/floor.png');
+    background-repeat: repeat;
+    background-size: cover;
     min-height: 100vh;
     padding: 0;
     margin: 0;
@@ -50,67 +56,31 @@ body {
 
 /* Sun styling */
 .sun {
-    position: absolute;
-    top: 15%;
-    right: 15%;
-    width: 80px;
-    height: 80px;
-    background-color: #ffdd44;
-    border-radius: 50%;
-    box-shadow: 0 0 50px #ffdd44;
-    z-index: 1;
-    animation: pulse 5s infinite alternate;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); box-shadow: 0 0 50px #ffdd44; }
-    100% { transform: scale(1.1); box-shadow: 0 0 70px #ffdd44; }
+    display: none;
 }
 
 /* Sun rays */
 .sun::after {
-    content: '';
-    position: absolute;
-    top: -30%;
-    left: -30%;
-    width: 160%;
-    height: 160%;
-    background-image: 
-        radial-gradient(circle, transparent 70%, #ffdd44 70%, #ffdd44 72%, transparent 72%),
-        radial-gradient(circle, transparent 70%, #ffdd44 70%, #ffdd44 72%, transparent 72%),
-        radial-gradient(circle, transparent 70%, #ffdd44 70%, #ffdd44 72%, transparent 72%),
-        radial-gradient(circle, transparent 70%, #ffdd44 70%, #ffdd44 72%, transparent 72%);
-    background-position: 0 0, 100% 0, 100% 100%, 0 100%;
-    background-size: 100% 100%;
-    transform: rotate(45deg);
-    z-index: -1;
-    animation: rotate 60s linear infinite;
-}
-
-@keyframes rotate {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    display: none;
 }
 
 .game-container {
     width: 100%;
     height: 100vh;
     position: relative;
-    z-index: 1;
+    z-index: 3;
     overflow: hidden;
     cursor: pointer; /* Show pointer cursor to indicate clickable area */
 }
 
 h1 {
-    color: #ff6b6b;
+    text-align: center;
+    color: #fff;
     font-size: 2.5rem;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    pointer-events: none; /* Allow clicks to pass through */
+    margin-top: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+    z-index: 5;
+    position: relative;
 }
 
 .pet-container {
@@ -141,6 +111,20 @@ h1 {
     user-select: none; /* Prevent text selection */
     -webkit-user-drag: none; /* Prevent dragging on WebKit browsers */
     -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+}
+
+/* Shake animation for rejected actions */
+@keyframes shake {
+    0% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-10px); }
+    80% { transform: translateX(10px); }
+    100% { transform: translateX(0); }
+}
+
+#pet-sprite.shake {
+    animation: shake 0.5s ease-in-out;
 }
 
 /* Move stats to bottom right corner */
@@ -199,6 +183,10 @@ h1 {
     background-color: #2196f3;
 }
 
+#sleepiness-bar {
+    background-color: #9c27b0;
+}
+
 /* Move controls to bottom center */
 .controls {
     position: absolute;
@@ -254,18 +242,32 @@ button:active {
     background-color: #9e9e9e;
 }
 
-/* Move message log to top left corner and make it smaller */
+/* Sleep button styles */
+#sleep-btn {
+    background-color: #673ab7;
+}
+
+#sleep-btn:hover {
+    background-color: #512da8;
+}
+
+#sleep-btn.active {
+    background-color: #673ab7;
+    border: 2px solid white;
+}
+
+/* Move message log to top left corner and make it bigger */
 .message-log {
     position: absolute;
     top: 20px;
     left: 20px;
-    width: 250px;
-    background-color: rgba(255, 255, 255, 0.7);
-    padding: 10px;
+    width: 350px; /* Increased from 250px */
+    background-color: rgba(255, 255, 255, 0.85); /* Increased opacity for better readability */
+    padding: 15px; /* Increased padding */
     border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Enhanced shadow */
     z-index: 10;
-    max-height: 200px;
+    max-height: 300px; /* Increased from 200px */
     overflow-y: auto;
     transition: opacity 0.3s ease;
     pointer-events: auto; /* Make sure it's clickable */
@@ -277,51 +279,92 @@ button:active {
 }
 
 .message-log:not(:hover) {
-    opacity: 0.7;
+    opacity: 0.9; /* Increased from 0.7 for better visibility */
 }
 
 .message-log h3 {
-    color: #555;
-    margin-bottom: 5px;
-    font-size: 0.9rem;
+    color: #333; /* Darker color for better contrast */
+    margin-bottom: 10px; /* Increased margin */
+    font-size: 1.1rem; /* Increased from 0.9rem */
+    font-weight: bold;
+}
+
+/* Message header with title and clear button */
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+/* Clear messages button */
+#clear-messages {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#clear-messages:hover {
+    background-color: #d32f2f;
 }
 
 #message-container {
-    max-height: 150px;
+    max-height: 250px; /* Increased from 150px */
     overflow-y: auto;
-    padding: 5px;
-    background-color: rgba(249, 249, 249, 0.7);
+    padding: 10px; /* Increased padding */
+    background-color: rgba(249, 249, 249, 0.9); /* Increased opacity */
     border-radius: 5px;
-    font-size: 0.8rem;
+    font-size: 1rem; /* Increased from 0.8rem */
+    line-height: 1.4; /* Added line height for better readability */
 }
 
 .message {
-    margin-bottom: 3px;
-    padding: 3px;
-    border-bottom: 1px solid #eee;
+    margin-bottom: 6px; /* Increased from 3px */
+    padding: 5px; /* Increased from 3px */
+    border-bottom: 1px solid #ddd; /* Slightly darker border */
+}
+
+/* Timestamp styling */
+.timestamp {
+    color: #555;
+    margin-right: 5px;
+    font-size: 0.9rem;
 }
 
 .message.server {
-    color: #2196f3;
+    color: #0d47a1; /* Darker blue for better readability */
+    font-weight: 500; /* Added some weight */
 }
 
 .message.client {
-    color: #ff9800;
+    color: #e65100; /* Darker orange for better readability */
+    font-weight: 500; /* Added some weight */
 }
 
 /* Add some clouds */
+@keyframes pulse {
+    /* Empty to remove */
+}
+
+@keyframes rotate {
+    /* Empty to remove */
+}
+
 @keyframes float {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100vw); }
+    /* Empty to remove */
+}
+
+@keyframes flutter {
+    /* Empty to remove */
 }
 
 .cloud {
-    position: absolute;
-    background-color: white;
-    border-radius: 50%;
-    opacity: 0.8;
-    z-index: 1;
-    pointer-events: none; /* Allow clicks to pass through */
+    display: none;
 }
 
 .cloud:nth-child(2) {
@@ -364,26 +407,14 @@ button:active {
     right: 10%;
 }
 
-/* Add ground across the bottom of the screen */
+/* Ground is now part of the body background */
 .ground {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 40%;
-    background-color: #a8e6cf;
-    z-index: 0;
-    pointer-events: none; /* Allow clicks to pass through */
+    display: none;
 }
 
 /* Add flowers to the ground */
 .flower {
-    position: absolute;
-    bottom: 5%;
-    width: 20px;
-    height: 20px;
-    z-index: 2;
-    pointer-events: none; /* Allow clicks to pass through */
+    display: none;
 }
 
 .flower::before {
@@ -440,12 +471,7 @@ button:active {
 }
 
 .butterfly {
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    z-index: 3;
-    animation: flutter 4s infinite ease-in-out, float 30s linear infinite;
-    pointer-events: none; /* Allow clicks to pass through */
+    display: none;
 }
 
 .butterfly::before,
@@ -576,44 +602,58 @@ button:active {
     background-color: #555;
 }
 
-/* Cake Container */
-.cake-container {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: 15px;
+/* Item Container - Common class for all draggable items */
+.item-container {
     position: relative;
-    cursor: grab;
-    transition: transform 0.2s;
-    background-color: rgba(255, 255, 255, 0.2);
-    padding: 8px;
+    width: 50px;
+    height: 50px;
+    background-color: rgba(255, 255, 255, 0.7);
     border-radius: 50%;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-.cake-container:hover {
-    transform: scale(1.1);
-    background-color: rgba(255, 255, 255, 0.3);
-}
-
-.cake-container:active {
-    cursor: grabbing;
-    transform: scale(1.15);
-}
-
-#cake-sprite {
-    width: 40px;
-    height: 40px;
-    object-fit: contain;
-    user-select: none;
-    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
-    pointer-events: auto !important;
-    -webkit-user-drag: element !important;
-    -khtml-user-drag: element !important;
-    -moz-user-drag: element !important;
-    -o-user-drag: element !important;
-    user-drag: element !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     cursor: grab;
+    transition: all 0.3s ease;
+    margin-left: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.item-container:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+.item-container:active {
+    cursor: grabbing;
+    transform: translateY(0);
+}
+
+.item-container img {
+    max-width: 40px;
+    max-height: 40px;
+    transition: transform 0.3s ease;
+    pointer-events: none; /* Allow drag events to be captured by the container */
+}
+
+/* Tooltip for items */
+.item-container .tooltip {
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.item-container:hover .tooltip {
+    opacity: 1;
 }
 
 /* Dragging States */
@@ -630,13 +670,15 @@ button:active {
 
 /* Feeding Animation */
 @keyframes feeding {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+    0% { transform: translateY(0) scale(1); }
+    25% { transform: translateY(-5px) scale(1.05); }
+    50% { transform: translateY(0) scale(1.1); }
+    75% { transform: translateY(-3px) scale(1.05); }
+    100% { transform: translateY(0) scale(1); }
 }
 
 .feeding {
-    animation: feeding 0.8s ease-in-out;
+    animation: feeding 0.5s ease-in-out;
 }
 
 /* Cake Animation */
@@ -649,27 +691,6 @@ button:active {
 .float-to-pet {
     position: absolute;
     animation: float-to-pet 0.8s forwards;
-}
-
-/* Tooltip */
-.tooltip {
-    position: absolute;
-    bottom: -25px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: rgba(0, 0, 0, 0.7);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
-}
-
-.cake-container:hover .tooltip {
-    opacity: 1;
 }
 
 /* Hunger indicator */
@@ -686,4 +707,66 @@ button:active {
     right: -10px;
     font-size: 20px;
     animation: hungry-pulse 1.5s infinite;
+}
+
+/* Sleepiness indicator */
+@keyframes sleepy-pulse {
+    0% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.05) rotate(5deg); }
+    100% { transform: scale(1) rotate(0deg); }
+}
+
+.pet-container.sleepy::before {
+    content: "😴";
+    position: absolute;
+    top: -20px;
+    left: -10px;
+    font-size: 20px;
+    animation: sleepy-pulse 2s infinite;
+}
+
+/* Empty animation keyframes */
+@keyframes float {
+    /* Empty to remove */
+}
+
+/* Make sure coffee sprite is draggable */
+#coffee-sprite {
+    cursor: grab;
+    pointer-events: auto !important;
+    user-select: none;
+    -webkit-user-drag: auto !important; /* Enable dragging on WebKit browsers */
+    -khtml-user-drag: auto !important;
+    -moz-user-drag: auto !important;
+    -o-user-drag: auto !important;
+    user-drag: auto !important;
+    max-width: 30px !important; /* Control the size */
+    max-height: 30px !important; /* Control the size */
+}
+
+#coffee-sprite:active {
+    cursor: grabbing;
+}
+
+/* Make sure cake sprite matches coffee sprite size */
+#cake-sprite {
+    cursor: grab;
+    pointer-events: auto !important;
+    user-select: none;
+    -webkit-user-drag: auto !important; /* Enable dragging on WebKit browsers */
+    -khtml-user-drag: auto !important;
+    -moz-user-drag: auto !important;
+    -o-user-drag: auto !important;
+    user-drag: auto !important;
+    max-width: 30px !important; /* Control the size */
+    max-height: 30px !important; /* Control the size */
+}
+
+#cake-sprite:active {
+    cursor: grabbing;
+}
+
+/* Add a dragging class for coffee container */
+.coffee-container.dragging {
+    opacity: 0.6;
 } 

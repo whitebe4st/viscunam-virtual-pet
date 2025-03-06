@@ -65,6 +65,7 @@ const wss = new WebSocket.Server({ server });
 const ACTIONS = {
     CONNECT: 'CONNECT',
     FEED: 'FEED',
+    COFFEE: 'COFFEE',
     UPDATE: 'UPDATE',
     DISCONNECT: 'DISCONNECT'
 };
@@ -83,6 +84,7 @@ wss.on('connection', (ws) => {
     const petState = {
         hunger: 100,
         happiness: 100,
+        sleepiness: 0, // Add sleepiness property (0 means not sleepy at all)
         lastUpdate: Date.now(),
         status: 'normal'
     };
@@ -112,6 +114,7 @@ wss.on('connection', (ws) => {
 // Handle messages from clients
 function handleClientMessage(clientId, message) {
     console.log(`Received from client ${clientId}: ${message}`);
+    console.log(`Message type: ${typeof message}`);
     
     const client = clients.get(clientId);
     if (!client) return;
@@ -119,6 +122,10 @@ function handleClientMessage(clientId, message) {
     const parts = message.split('|');
     const action = parts[0];
     const params = {};
+    
+    console.log(`Parsed action: "${action}"`);
+    console.log(`ACTIONS.COFFEE value: "${ACTIONS.COFFEE}"`);
+    console.log(`Are they equal? ${action === ACTIONS.COFFEE}`);
     
     // Parse parameters
     for (let i = 1; i < parts.length; i++) {
@@ -131,7 +138,7 @@ function handleClientMessage(clientId, message) {
         case ACTIONS.CONNECT:
             // Send initial update to client
             sendUpdate(clientId);
-            sendStatus(clientId, 200, 'Connected successfully');
+            sendStatus(clientId, 200, 'Connected successfully', ACTIONS.CONNECT);
             break;
             
         case ACTIONS.FEED:
@@ -143,12 +150,37 @@ function handleClientMessage(clientId, message) {
             
             // Send update to client
             sendUpdate(clientId);
-            sendStatus(clientId, 200, 'Fed Viscunam successfully');
+            sendStatus(clientId, 200, 'Fed Viscunam successfully', ACTIONS.FEED);
+            break;
+            
+        case ACTIONS.COFFEE:
+            // Check if sleepiness is already 0
+            if (client.petState.sleepiness === 0) {
+                // Pet is already fully awake, can't drink more coffee
+                sendStatus(clientId, 400, 'Viscunam is already fully awake and doesn\'t need coffee', ACTIONS.COFFEE);
+                break;
+            }
+            
+            // Give coffee to the pet (reduce sleepiness)
+            client.petState.sleepiness = Math.max(0, client.petState.sleepiness - 30);
+            client.petState.happiness = Math.min(100, client.petState.happiness + 5);
+            client.petState.lastUpdate = Date.now();
+            
+            // Update status to normal if it was slumber
+            if (client.petState.status === 'slumber') {
+                client.petState.status = 'normal';
+            }
+            
+            updatePetStatus(client.petState);
+            
+            // Send update to client
+            sendUpdate(clientId);
+            sendStatus(clientId, 200, 'Gave coffee to Viscunam successfully', ACTIONS.COFFEE);
             break;
             
         case ACTIONS.DISCONNECT:
             // Client is disconnecting
-            sendStatus(clientId, 200, 'Disconnected successfully');
+            sendStatus(clientId, 200, 'Disconnected successfully', ACTIONS.DISCONNECT);
             break;
             
         default:
@@ -168,12 +200,15 @@ function updatePetState(clientId) {
     // Decrease hunger over time (1 point per 5 seconds)
     petState.hunger = Math.max(0, petState.hunger - (timeElapsed / 5));
     
-    // Happiness depends on hunger
-    if (petState.hunger < 30) {
-        // Pet is hungry, happiness decreases faster
+    // Increase sleepiness over time (1 point per 8 seconds)
+    petState.sleepiness = Math.min(100, petState.sleepiness + (timeElapsed / 8));
+    
+    // Happiness depends on hunger and sleepiness
+    if (petState.hunger < 30 || petState.sleepiness > 70) {
+        // Pet is hungry or sleepy, happiness decreases faster
         petState.happiness = Math.max(0, petState.happiness - (timeElapsed / 3));
     } else {
-        // Pet is well-fed, happiness decreases slowly
+        // Pet is well-fed and awake, happiness decreases slowly
         petState.happiness = Math.max(0, petState.happiness - (timeElapsed / 10));
     }
     
@@ -186,7 +221,9 @@ function updatePetState(clientId) {
 
 // Update pet status based on current stats
 function updatePetStatus(petState) {
-    if (petState.hunger < 30) {
+    if (petState.sleepiness > 70) {
+        petState.status = 'slumber'; // Pet is very sleepy
+    } else if (petState.hunger < 30) {
         petState.status = 'slumber'; // Pet is hungry and tired
     } else if (petState.happiness > 70) {
         petState.status = 'happi'; // Pet is happy
@@ -203,21 +240,26 @@ function sendUpdate(clientId) {
     const { ws, petState } = client;
     
     // Format message according to our protocol
-    const message = `${ACTIONS.UPDATE}|hunger:${Math.floor(petState.hunger)}|happiness:${Math.floor(petState.happiness)}|status:${petState.status}`;
+    const message = `${ACTIONS.UPDATE}|hunger:${Math.floor(petState.hunger)}|happiness:${Math.floor(petState.happiness)}|sleepiness:${Math.floor(petState.sleepiness)}|status:${petState.status}`;
     
     ws.send(message);
     console.log(`Sent to client ${clientId}: ${message}`);
 }
 
 // Send status message to client
-function sendStatus(clientId, code, message) {
+function sendStatus(clientId, code, message, action = '') {
     const client = clients.get(clientId);
     if (!client) return;
     
     const { ws } = client;
     
     // Format status message according to our protocol
-    const statusMessage = `STATUS|code:${code}|message:${message}`;
+    let statusMessage = `STATUS|code:${code}|message:${message}`;
+    
+    // Add action if provided
+    if (action) {
+        statusMessage += `|action:${action}`;
+    }
     
     ws.send(statusMessage);
     console.log(`Sent to client ${clientId}: ${statusMessage}`);
